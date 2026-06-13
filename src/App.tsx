@@ -720,10 +720,10 @@ export default function App() {
                 <Newspaper size={24} />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight uppercase font-serif leading-none">
+                <h1 className={`tracking-tight uppercase leading-none ${language === 'te' ? 'font-te-serif text-4xl md:text-5xl font-bold' : 'font-serif text-3xl md:text-4xl font-extrabold'}`}>
                   {language === 'te' ? 'చిత్తూరు టైమ్స్' : 'Chittoor Times'}
                 </h1>
-                <p className="text-[10px] uppercase tracking-widest font-sans text-[#1A1A1A]/60 font-bold block mt-1">
+                <p className={`text-[10px] uppercase tracking-widest text-[#1A1A1A]/60 font-bold block mt-1 ${language === 'te' ? 'font-te-sans' : 'font-sans'}`}>
                   {t('header_subtitle')}
                 </p>
               </div>
@@ -1591,7 +1591,7 @@ export default function App() {
             <div className="w-8 h-8 bg-neutral-900 rounded-full flex items-center justify-center text-white text-sm">
               <Newspaper size={14} />
             </div>
-            <span className="font-serif font-black uppercase text-sm tracking-wide text-gray-800">
+            <span className={`font-black uppercase text-sm tracking-wide text-gray-800 ${language === 'te' ? 'font-te-serif' : 'font-serif'}`}>
               {language === 'te' ? 'చిత్తూరు టైమ్స్ పబ్లిషింగ్ హౌస్ ప్రైవేట్ లిమిటెడ్' : 'Chittoor Times News Platform'}
             </span>
           </div>
