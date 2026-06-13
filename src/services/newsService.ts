@@ -139,6 +139,55 @@ export const WIRE_POOL = [
     wireHeadlineTe: "కాలుష్య రహిత రవాణా: క్లీన్ సాలిడ్ హైడ్రోజన్ ప్రయాణ విమానం ప్రయోగాత్మక ప్రయాణ సక్సెస్",
     rawWireText: "A European aviation conglomerate performed safe flight testing on a 40-seat commercial glider prototype driven entirely by solid hydrogen. Commercial entries are slated for 2029.",
     rawWireTextTe: "యూరోప్ కు చెందిన విమానయాన సంస్థ 40 సీట్ల సామర్థ్యం గల ప్రయోగాత్మక హైడ్రోజన్ గ్లైడర్ విమానాన్ని ఆకాశవీధిలోకి పంపించింది. 2029 కల్లా దీని కమర్షియల్ సేవలు రానున్నాయి."
+  },
+  {
+    category: "Politics",
+    wireHeadline: "District assembly resolves municipal boundaries update for Kuppam and Madanapalle",
+    wireHeadlineTe: "కుప్పం, మదనపల్లె మున్సిపల్ సరిహద్దుల సవరణకు జిల్లా అసెంబ్లీ తీర్మానం",
+    rawWireText: "A key administrative bill was tabled in the assembly to expand municipal limits. It details infrastructure alignment, rural roads merge, and developmental budget allocations.",
+    rawWireTextTe: "జిల్లా అసెంబ్లీలో సరిహద్దుల విస్తరణకు సంబంధించిన బిల్లు ఆమోదించబడింది. కుప్పం మరియు మదనపల్లె అభివృద్ధికి ప్రత్యేక బడ్జెట్ కేటాయింపులు చేయనున్నారు."
+  },
+  {
+    category: "Business",
+    wireHeadline: "Chittoor dairy cooperatives report record 22% growth in processing capacity",
+    wireHeadlineTe: "చిత్తూరు డెయిరీ సహకార సంఘం ప్రాసెసింగ్ సామర్థ్యంలో 22 శాతం రికార్డు వృద్ధి",
+    rawWireText: "Cooperative leaders certified fresh milk cold chains and pasteurization equipment upgrades. Ties with major regional retail distributors will commence next month.",
+    rawWireTextTe: "చిత్తూరు డెయిరీ సహకార సంఘం పాలు ప్యాకేజింగ్ మరియు శీతలీకరణ యంత్రాలను అప్‌గ్రేడ్ చేసింది. దీనివల్ల ఉత్పత్తి సామర్థ్యం మరియు స్థానిక ఉపాధి భారీగా పెరగనుంది."
+  },
+  {
+    category: "Economics",
+    wireHeadline: "District trade credit volumes touch historic highs as agro-industrial lines expand",
+    wireHeadlineTe: "వ్యవసాయ పారిశ్రామిక క్లస్టర్లలో పెరిగిన వాణిజ్య పరపతి రుణాలు: ఆర్ధిక నివేదిక",
+    rawWireText: "State banking statistics recorded an influx of minor credits to agro-processors in Tirupati district. Leads to stable economic progression index for rural communities.",
+    rawWireTextTe: "తిరుపతి మరియు చిత్తూరు పరిసరాల్లో వాణిజ్య రుణాలు అత్యధిక స్థాయికి చేరుకున్నాయని ఆర్థిక నివేదిక వెల్లడించింది. దీనితో చిన్న పరిశ్రమల వ్యవస్థ బలోపేతం కానుంది."
+  },
+  {
+    category: "Technology",
+    wireHeadline: "Tirupati IT incubation center launches smart agri-sensor prototype trials",
+    wireHeadlineTe: "తిరుపతి ఐటీ ఇంక్యుబేషన్ కేంద్రంలో స్మార్ట్ వ్యవసాయ సెన్సార్ల నూతన ప్రయోగం",
+    rawWireText: "Tech developers designed internet-of-things moisture monitoring nodes for water conservation. Select farms in the region have been chosen for live telemetry assessment.",
+    rawWireTextTe: "వ్యవసాయంలో నీటి ఆదా కొరకు తిరుపతి శాస్త్రవేత్తలు ఐఓటీ సెన్సార్లను రూపొందించారు. జిల్లాలోని ఎంపిక చేసిన పొలాల్లో ప్రస్తుతం ట్రయల్ రన్స్ విజయవంతంగా సాగుతున్నాయి."
+  },
+  {
+    category: "Sports",
+    wireHeadline: "District youth sports academy wins southern regional athletic gold championship",
+    wireHeadlineTe: "జిల్లా క్రీడా అకాడమీకి రన్నరప్ స్వర్ణ పతకం: ప్రాంతీయ పోటీల్లో విజయం",
+    rawWireText: "Under-19 training cells secured outstanding victories in Chennai sprint relays. Coaches attribute success to the new synthetic tracks laid in Tirupati sports grounds.",
+    rawWireTextTe: "జిల్లా అండర్-19 అథ్లెటిక్స్ జట్టు ప్రాంతీయ పరుగు పందెం పోటీలలో ఘన విజయం సాధించింది. తిరుపతిలో కొత్తగా ఏర్పాటు చేసిన సింథటిక్ ట్రాక్ ఇందుకు దోహదపడిందని కోచ్ తెలిపారు."
+  },
+  {
+    category: "Cinema",
+    wireHeadline: "Madanapalle cultural society hosts international cinema retrospective festival",
+    wireHeadlineTe: "మదనపల్లి సాంస్కృతిక వేదికపై అంతర్జాతీయ చలనచిత్ర ప్రదర్శనోత్సవం",
+    rawWireText: "Organizers confirmed screening of classic award-winning visual drama prints. Prominent art directors and local artists are scheduled to hold script workshops.",
+    rawWireTextTe: "మదనపల్లిలో నాలుగు రోజుల పాటు సాగే ప్రతిష్టాత్మక చలనచిత్ర వేడుకలు ప్రారంభమయ్యాయి. స్థానిక కళాకారులు మరియు సినీ విమర్శకులు పాల్గొని వర్క్‌షాపులు నిర్వహించనున్నారు."
+  },
+  {
+    category: "Classifieds",
+    wireHeadline: "Property development ads hit record volume in Tirupati and Chittoor suburb zones",
+    wireHeadlineTe: "తిరుపతి మరియు చిత్తూరు శివారు ప్రాంతాలలో ఇళ్ల స్థలాల క్రయ విక్రయ ప్రకటనలు",
+    rawWireText: "Classified indices show surging listings for residential layouts and commercial spaces. Buyers are advised to verify approved master-plan documentation locally.",
+    rawWireTextTe: "చిత్తూరు టైమ్స్ క్లాసిఫైడ్స్ పేజీలో రియల్ ఎస్టేట్ మరియు ఉద్యోగ ప్రకటనల సంఖ్య గణనీయంగా పెరిగింది. దరఖాస్తుదారులు స్థానిక అనుమతులను సరిచూసుకోవాలని సూచన."
   }
 ];
 
@@ -207,6 +256,24 @@ export function getNewsImage(title: string, category: string): string {
   }
   if (category === 'National') {
     return 'https://images.unsplash.com/photo-1532375811409-905115134054?auto=format&fit=crop&w=1200&q=80'; // India gateway
+  }
+  if (category === 'Politics') {
+    return 'https://images.unsplash.com/photo-1540910419892-4a36d2c3266c?auto=format&fit=crop&w=1200&q=80'; // Parliament / politics
+  }
+  if (category === 'Business' || category === 'Economics') {
+    return 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1200&q=80'; // Stock market chart
+  }
+  if (category === 'Technology') {
+    return 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80'; // microchip technology
+  }
+  if (category === 'Sports') {
+    return 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?auto=format&fit=crop&w=1200&q=80'; // Stadium / sports
+  }
+  if (category === 'Cinema') {
+    return 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?auto=format&fit=crop&w=1200&q=80'; // Movie theater
+  }
+  if (category === 'Classifieds') {
+    return 'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1200&q=80'; // Real estate key/handshake / classified ad
   }
   return 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80'; // global news technology
 }

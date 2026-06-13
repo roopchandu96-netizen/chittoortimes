@@ -37,7 +37,7 @@ export default function App() {
 
   // Tabs: 'live' (Today's live page) | 'archives' (Past dates wise pages) | 'crawler' (Realtime scanning monitor) | 'issues' (Citizen Grievance Portal)
   const [activeMainTab, setActiveMainTab] = useState<'live' | 'archives' | 'crawler' | 'issues'>('live');
-  const [activeCategory, setActiveCategory] = useState<'Local' | 'National' | 'International'>('Local');
+  const [activeCategory, setActiveCategory] = useState<'Local' | 'National' | 'International' | 'Politics' | 'Business' | 'Economics' | 'Technology' | 'Sports' | 'Cinema' | 'Classifieds'>('Local');
   
   const [crawlerActive, setCrawlerActive] = useState<boolean>(true);
   const [crawlerLogs, setCrawlerLogs] = useState<any[]>([]);
@@ -211,6 +211,13 @@ export default function App() {
       'local_edition': { en: 'Local Edition', te: 'స్థానిక వార్తలు' },
       'national_edition': { en: 'National Edition', te: 'జాతీయ వార్తలు' },
       'international_edition': { en: 'International Edition', te: 'అంతర్జాతీయ వార్తలు' },
+      'politics_edition': { en: 'Politics Edition', te: 'రాజకీయ వార్తలు' },
+      'business_edition': { en: 'Business Edition', te: 'వ్యాపార వార్తలు' },
+      'economics_edition': { en: 'Economics Edition', te: 'ఆర్థిక వార్తలు' },
+      'technology_edition': { en: 'Technology Edition', te: 'సాంకేతిక వార్తలు' },
+      'sports_edition': { en: 'Sports Edition', te: 'క్రీడా వార్తలు' },
+      'cinema_edition': { en: 'Cinema Edition', te: 'సినిమా వార్తలు' },
+      'classifieds_edition': { en: 'Classifieds Edition', te: 'ప్రకటనలు (Classifieds)' },
       'breaking_portal': { en: 'Breaking News Portal', te: 'తాజా బ్రేకింగ్ వార్తలు' },
       'front_page_bulletin': { en: "TODAY'S FRONT-PAGE BULLETIN", te: 'నేటి ఎడిషన్ ముఖ్యాంశాలు' },
       'current_edition_date': { en: 'CURRENT EDITION DATE', te: 'ప్రచురణ తేదీ సమాచారం' },
@@ -831,18 +838,29 @@ export default function App() {
           </div>
 
           {/* Subheader category navigation line */}
-          <div className="border-t border-[#1A1A1A]/10 pt-4 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-sans font-bold uppercase tracking-widest text-gray-500">
-            <div>
-              {language === 'te' ? 'చిత్తూరు జిల్లా • తిరుపతి నివేదికలు • భారత జాతీయ • అంతర్జాతీయ విద్యుత్తు' : 'CHITTOOR DISTRICT • TIRUPATI • INDIA NATIONAL • INTERNATIONAL AFFAIRS'}
+          <div className="border-t border-[#1A1A1A]/10 pt-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-xs font-sans font-bold uppercase tracking-widest text-gray-500">
+            <div className="whitespace-nowrap">
+              {language === 'te' ? 'తాజా ప్రచురణ శ్రేణి • చిత్తూరు ఎడిషన్' : 'LATEST DAILY PUBLISHING • CHITTOOR TIMES'}
             </div>
             
             {/* Category tabs */}
-            <div className="flex items-center gap-4">
-              {(['Local', 'National', 'International'] as const).map((cat) => (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 justify-start md:justify-end w-full md:w-auto">
+              {([
+                'Local', 
+                'National', 
+                'International', 
+                'Politics', 
+                'Business', 
+                'Economics', 
+                'Technology', 
+                'Sports', 
+                'Cinema', 
+                'Classifieds'
+              ] as const).map((cat) => (
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`pb-1 border-b-2 font-black transition-all ${activeCategory === cat ? 'border-[#1A1A1A] text-[#1A1A1A]' : 'border-transparent text-gray-400 hover:text-black'}`}
+                  className={`pb-1 border-b-2 font-black transition-all ${activeCategory === cat ? 'border-[#1A1A1A] text-[#1A1A1A]' : 'border-transparent text-gray-400 hover:text-black font-sans text-xs'}`}
                 >
                   {t(cat.toLowerCase() + '_edition')}
                 </button>
