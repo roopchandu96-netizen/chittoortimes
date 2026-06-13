@@ -20,9 +20,12 @@ import {
   Pause,
   Layers,
   AlertCircle,
-  Globe
+  Globe,
+  Settings,
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
-import { NewsArticle, newsService, WIRE_POOL, CrawlerLog } from './services/newsService';
+import { NewsArticle, newsService, WIRE_POOL, CrawlerLog, getNewsImage } from './services/newsService';
 
 export default function App() {
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -90,6 +93,113 @@ export default function App() {
   const [isSubmittingIssue, setIsSubmittingIssue] = useState(false);
   const [issueSuccessMsg, setIssueSuccessMsg] = useState('');
   const [activeIssueTab, setActiveIssueTab] = useState<'report' | 'timeline'>('report');
+  
+  const [apiKey, setApiKey] = useState<string>(() => localStorage.getItem('gemini_api_key') || '');
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+
+  const handleAuthSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAuthError('');
+
+    const savedUsersRaw = localStorage.getItem('chittoor_users');
+    const users = savedUsersRaw ? JSON.parse(savedUsersRaw) : [];
+
+    if (authTab === 'login') {
+      const match = users.find((u: any) => u.email.toLowerCase() === authForm.email.toLowerCase() && u.password === authForm.password);
+      if (match) {
+        const userSession = { id: match.id || Math.random().toString(36).substring(2, 9), name: match.name, email: match.email };
+        setCurrentUser(userSession);
+        localStorage.setItem('chittoor_user', JSON.stringify(userSession));
+        setShowAuthModal(false);
+        setAuthForm({ name: '', email: '', password: '' });
+      } else {
+        setAuthError('Invalid email address or password.');
+      }
+    } else {
+      const exists = users.some((u: any) => u.email.toLowerCase() === authForm.email.toLowerCase());
+      if (exists) {
+        setAuthError('An account with this email address already exists.');
+        return;
+      }
+
+      const newUser = {
+        id: Math.random().toString(36).substring(2, 9),
+        name: authForm.name,
+        email: authForm.email,
+        password: authForm.password
+      };
+
+      const updatedUsers = [...users, newUser];
+      localStorage.setItem('chittoor_users', JSON.stringify(updatedUsers));
+
+      const userSession = { id: newUser.id, name: newUser.name, email: newUser.email };
+      setCurrentUser(userSession);
+      localStorage.setItem('chittoor_user', JSON.stringify(userSession));
+      setShowAuthModal(false);
+      setAuthForm({ name: '', email: '', password: '' });
+    }
+  };
+
+  const handleAddComment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCommentText.trim() || !currentUser || !selectedArticle) return;
+
+    const newComment = {
+      id: Math.random().toString(36).substring(2, 9),
+      userName: currentUser.name,
+      userEmail: currentUser.email,
+      content: newCommentText,
+      createdAt: new Date().toISOString()
+    };
+
+    const updatedComments = [newComment, ...comments];
+    setComments(updatedComments);
+    localStorage.setItem(`chittoor_comments_${selectedArticle.id}`, JSON.stringify(updatedComments));
+    setNewCommentText('');
+  };
+
+  const handleIssueSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser) return;
+    setIsSubmittingIssue(true);
+    setIssueSuccessMsg('');
+
+    try {
+      const { issue: newIssue, article: newArt } = await newsService.submitIssue({
+        reporterName: currentUser.name,
+        reporterEmail: currentUser.email,
+        category: issueForm.category,
+        location: issueForm.location,
+        subject: issueForm.subject,
+        description: issueForm.description
+      }, apiKey);
+
+      setIssues(prev => [newIssue, ...prev]);
+      setNews(prev => [newArt, ...prev]);
+
+      setIssueSuccessMsg(`Thank you! Issue registered. Our AI assistant has immediately published this story under the Local category: "${newArt.title}"`);
+      setIssueForm({ location: '', category: 'Water', subject: '', description: '' });
+      
+      const newIssueLog: CrawlerLog = {
+        id: Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toISOString(),
+        type: 'post',
+        message: `Citizen journalist ${currentUser.name} reported a grievance in ${newIssue.location}. AI news column published!`
+      };
+      setCrawlerLogs(prev => [newIssueLog, ...prev]);
+      
+      setTimeout(() => {
+        setIssueSuccessMsg('');
+        setActiveIssueTab('timeline');
+      }, 5000);
+      
+      fetchNewsAndDates();
+    } catch (err: any) {
+      alert(`Failed to submit issue: ${err.message || err}`);
+    } finally {
+      setIsSubmittingIssue(false);
+    }
+  };
 
   // Translation lookup helper dictionary
   const t = (key: string): string => {
@@ -176,13 +286,25 @@ export default function App() {
     };
   }, []);
 
+  // Fetch comments when an article is selected
+  useEffect(() => {
+    if (selectedArticle) {
+      setIsLoadingComments(true);
+      const savedComments = localStorage.getItem(`chittoor_comments_${selectedArticle.id}`);
+      setComments(savedComments ? JSON.parse(savedComments) : []);
+      setIsLoadingComments(false);
+    } else {
+      setComments([]);
+    }
+  }, [selectedArticle]);
+
   const currentWireIndexRef = useRef(0);
 
   // Client-side periodic auto crawling simulation
   useEffect(() => {
     if (!crawlerActive) return;
 
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       const wire = WIRE_POOL[currentWireIndexRef.current];
       currentWireIndexRef.current = (currentWireIndexRef.current + 1) % WIRE_POOL.length;
       
@@ -197,25 +319,36 @@ export default function App() {
         id: Math.random().toString(36).substring(2, 9),
         timestamp: new Date().toISOString(),
         type: 'rewrite',
-        message: `Transforming wire "${wire.wireHeadline}" via local semantic rewriter...`
+        message: apiKey 
+          ? `Transforming wire "${wire.wireHeadline}" via Gemini AI model...`
+          : `Transforming wire "${wire.wireHeadline}" via local semantic rewriter...`
       };
 
-      const saved = newsService.generateDailyNews("", wire.category);
-      
-      const publishLog: CrawlerLog = {
-        id: Math.random().toString(36).substring(2, 9),
-        timestamp: new Date().toISOString(),
-        type: 'post',
-        message: `Successfully published article bilingually to "${wire.category} Edition": "${saved.title}"`
-      };
+      try {
+        const saved = await newsService.generateDailyNews("", wire.category, apiKey);
+        
+        const publishLog: CrawlerLog = {
+          id: Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          type: 'post',
+          message: `Successfully published article bilingually to "${wire.category} Edition": "${saved.title}"`
+        };
 
-      setCrawlerLogs(prev => [publishLog, rewriteLog, searchLog, ...prev]);
-      
-      fetchNewsAndDates();
+        setCrawlerLogs(prev => [publishLog, rewriteLog, searchLog, ...prev]);
+        fetchNewsAndDates();
+      } catch (err: any) {
+        const errorLog: CrawlerLog = {
+          id: Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          type: 'error',
+          message: `Autopilot execution error: ${err.message || err}`
+        };
+        setCrawlerLogs(prev => [errorLog, rewriteLog, searchLog, ...prev]);
+      }
     }, 45000); // Trigger auto-crawl step every 45 seconds when active
 
     return () => clearInterval(interval);
-  }, [crawlerActive]);
+  }, [crawlerActive, apiKey]);
 
   // Show a top screen flash when a brand-new article is automatically posted in the background
   useEffect(() => {
@@ -243,6 +376,9 @@ export default function App() {
     
     const dates = newsService.getAvailableDates(allNews);
     setAvailableDates(dates);
+    
+    const allIssues = newsService.getIssues();
+    setIssues(allIssues);
     
     if (dates.length > 0 && !selectedArchiveDate) {
       const todayString = new Date().toDateString();
@@ -323,14 +459,16 @@ export default function App() {
       id: Math.random().toString(36).substring(2, 9),
       timestamp: new Date().toISOString(),
       type: 'rewrite',
-      message: `Executing client-side search compilation for "${activeCategory}"...`
+      message: apiKey 
+        ? `Executing Gemini AI search compilation for "${activeCategory}"...`
+        : `Executing client-side search compilation for "${activeCategory}"...`
     };
     
     setCrawlerLogs(prev => [rewriteLog, searchLog, ...prev]);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        const saved = newsService.generateDailyNews("", activeCategory);
+        const saved = await newsService.generateDailyNews("", activeCategory, apiKey);
         
         const publishLog: CrawlerLog = {
           id: Math.random().toString(36).substring(2, 9),
@@ -341,8 +479,14 @@ export default function App() {
         
         setCrawlerLogs(prev => [publishLog, ...prev]);
         fetchNewsAndDates();
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        const errorLog: CrawlerLog = {
+          id: Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          type: 'error',
+          message: `Manual scan failed: ${err.message || err}`
+        };
+        setCrawlerLogs(prev => [errorLog, ...prev]);
       } finally {
         setIsGenerating(false);
       }
@@ -436,7 +580,7 @@ export default function App() {
 
               <div className="aspect-video w-full overflow-hidden relative">
                 <img 
-                  src={`https://picsum.photos/seed/${selectedArticle.id}/1200/800`} 
+                  src={getNewsImage(selectedArticle.title, selectedArticle.category)} 
                   alt={language === 'te' ? (selectedArticle.title_te || selectedArticle.title) : selectedArticle.title}
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
@@ -458,28 +602,95 @@ export default function App() {
                   <span>{t('by')} {selectedArticle.author}</span>
                 </div>
 
-                <h2 className="text-2xl md:text-4xl font-extrabold leading-tight mb-8 text-[#1A1A1A]">
+                <h2 className={`leading-tight mb-8 text-[#1A1A1A] ${language === 'te' ? 'news-title-te' : 'news-title-en text-2xl md:text-4xl font-extrabold'}`}>
                   {language === 'te' ? (selectedArticle.title_te || selectedArticle.title) : selectedArticle.title}
                 </h2>
 
-                <div className="text-base md:text-lg text-[#2A2A2A] leading-relaxed whitespace-pre-wrap font-serif border-l-4 border-[#5A5A40] pl-6 py-2 my-6 italic bg-[#F5F5F0]/50 rounded-r-xl">
+                <div className={`text-base md:text-lg text-[#2A2A2A] leading-relaxed whitespace-pre-wrap border-l-4 border-[#5A5A40] pl-6 py-2 my-6 italic bg-[#F5F5F0]/50 rounded-r-xl ${language === 'te' ? 'news-body-te' : 'news-body-en'}`}>
                   {(language === 'te' ? (selectedArticle.content_te || selectedArticle.content) : selectedArticle.content).split('\n\n')[0]}
                 </div>
 
-                <div className="prose prose-lg max-w-none text-[#1A1A1A]/85 leading-relaxed whitespace-pre-wrap font-serif">
+                <div className={`prose prose-lg max-w-none text-[#1A1A1A]/85 leading-relaxed whitespace-pre-wrap ${language === 'te' ? 'news-body-te' : 'news-body-en'}`}>
                   {(language === 'te' ? (selectedArticle.content_te || selectedArticle.content) : selectedArticle.content).split('\n\n').slice(1).join('\n\n') || (language === 'te' ? (selectedArticle.content_te || selectedArticle.content) : selectedArticle.content)}
                 </div>
 
-                <div className="mt-12 pt-8 border-t border-[#1A1A1A]/10 flex items-center justify-between">
+                {/* Comments Section */}
+                <div className="mt-12 pt-8 border-t border-[#1A1A1A]/10">
+                  <h3 className="text-xl font-bold font-serif mb-6 flex items-center gap-2">
+                    <MessageSquare size={20} />
+                    {t('comments')} ({comments.length})
+                  </h3>
+                  
+                  {currentUser ? (
+                    <form onSubmit={handleAddComment} className="mb-8 space-y-3">
+                      <textarea
+                        value={newCommentText}
+                        onChange={e => setNewCommentText(e.target.value)}
+                        placeholder={t('comment_placeholder')}
+                        rows={3}
+                        className="w-full p-4 bg-[#F5F5F0] rounded-2xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none resize-none font-sans text-sm"
+                        required
+                      />
+                      <button
+                        type="submit"
+                        className="px-6 py-2.5 bg-[#5A5A40] text-white rounded-xl text-xs font-sans font-bold hover:bg-[#4A4A30] transition-all"
+                      >
+                        {t('add_comment')}
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="bg-neutral-50 border border-gray-200/50 p-4 rounded-2xl text-center mb-8">
+                      <p className="text-xs text-gray-500 font-sans mb-3">{t('login_to_comment')}</p>
+                      <button
+                        onClick={() => { setAuthTab('login'); setShowAuthModal(true); }}
+                        className="px-5 py-2 bg-[#1A1A1A] text-white rounded-xl text-xs font-sans font-bold hover:bg-black transition-all"
+                      >
+                        {t('sign_in')}
+                      </button>
+                    </div>
+                  )}
+
+                  {isLoadingComments ? (
+                    <div className="text-center py-4 text-xs font-sans text-gray-400 font-bold">Loading discussion...</div>
+                  ) : comments.length > 0 ? (
+                    <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2 scrollbar-thin">
+                      {comments.map((c) => (
+                        <div key={c.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm space-y-1">
+                          <div className="flex justify-between items-center text-[10px] font-sans font-bold text-gray-400">
+                            <span className="text-[#5A5A40]">{c.userName}</span>
+                            <span>{new Date(c.createdAt).toLocaleString()}</span>
+                          </div>
+                          <p className="text-sm font-sans text-gray-700 leading-relaxed">{c.content}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs font-sans text-gray-400 italic text-center py-4">No comments yet. Be the first to share your thoughts!</p>
+                  )}
+                </div>
+
+                <div className="mt-12 pt-8 border-t border-[#1A1A1A]/10 flex flex-col sm:flex-row items-center justify-between gap-4">
                   <div className="text-xs font-sans text-gray-400 uppercase tracking-widest">
                     {language === 'te' ? 'చిత్తూరు టైమ్స్ పబ్లిషింగ్ హౌస్' : 'CHITTOOR TIMES PRESS SYNDICATE'}
                   </div>
-                  <button 
-                    onClick={() => setSelectedArticle(null)}
-                    className="px-8 py-3 bg-[#1A1A1A] text-white rounded-full font-sans font-bold hover:bg-black transition-colors"
-                  >
-                    {t('return_to_bulletin')}
-                  </button>
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <button 
+                      onClick={() => {
+                        navigator.clipboard.writeText(window.location.origin + window.location.pathname + '#article-' + selectedArticle.id);
+                        setShareToast(true);
+                        setTimeout(() => setShareToast(false), 3000);
+                      }}
+                      className="flex-1 sm:flex-none px-6 py-3 border border-gray-300 hover:bg-gray-100 text-gray-700 rounded-full font-sans font-bold transition-all text-xs uppercase tracking-wider text-center"
+                    >
+                      {shareToast ? '✓ Copied' : '🔗 Copy Link'}
+                    </button>
+                    <button 
+                      onClick={() => setSelectedArticle(null)}
+                      className="flex-1 sm:flex-none px-8 py-3 bg-[#1A1A1A] text-white rounded-full font-sans font-bold hover:bg-black transition-colors text-xs uppercase tracking-wider text-center"
+                    >
+                      {t('return_to_bulletin')}
+                    </button>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -562,16 +773,58 @@ export default function App() {
                 {t('ai_harvester')} 
                 <span className={`w-2 h-2 rounded-full ${crawlerActive ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} />
               </button>
+
+              <button 
+                onClick={() => setActiveMainTab('issues')}
+                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${activeMainTab === 'issues' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
+              >
+                <Globe size={14} />
+                {t('citizen_portal')}
+              </button>
             </div>
 
-            {/* Admin Add Article Button */}
+            {/* Profile dashboard & Settings gear & Admin Add Article Button */}
             <div className="flex items-center gap-2">
+              {currentUser ? (
+                <div className="flex items-center gap-2 bg-[#5A5A40]/10 border border-[#5A5A40]/20 rounded-full pl-3 pr-1 py-1">
+                  <span className="font-sans text-[11px] font-bold text-[#5A5A40] max-w-[100px] truncate">
+                    👤 {currentUser.name}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setCurrentUser(null);
+                      localStorage.removeItem('chittoor_user');
+                    }}
+                    className="p-1 text-gray-500 hover:text-red-600 hover:bg-white rounded-full transition-all"
+                    title={t('sign_out')}
+                  >
+                    <LogOut size={13} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setAuthTab('login'); setShowAuthModal(true); }}
+                  className="px-4 py-2 bg-[#1A1A1A] text-white font-sans text-xs font-bold uppercase rounded-full hover:bg-black transition-all shadow-sm flex items-center gap-1.5"
+                >
+                  <User size={12} />
+                  {t('sign_in')}
+                </button>
+              )}
+
+              <button
+                onClick={() => setShowSettingsModal(true)}
+                className="p-2 bg-[#1A1A1A]/5 hover:bg-[#1A1A1A]/10 text-gray-700 border border-gray-200 rounded-full transition-all"
+                title="Engine Settings"
+              >
+                <Settings size={16} />
+              </button>
+
               <button 
                 onClick={() => setShowAdmin(!showAdmin)}
-                className={`p-2.5 rounded-full border transition-all ${showAdmin ? 'bg-[#1A1A1A] text-white border-black' : 'bg-[#1A1A1A]/5 text-[#1A1A1A] border-gray-200 hover:bg-[#1A1A1A]/10'}`}
+                className={`p-2 rounded-full border transition-all ${showAdmin ? 'bg-[#1A1A1A] text-white border-black' : 'bg-[#1A1A1A]/5 text-[#1A1A1A] border-gray-200 hover:bg-[#1A1A1A]/10'}`}
                 title="Write Manual News Column"
               >
-                <Plus size={20} className={showAdmin ? "rotate-45 transition-transform" : "transition-transform"} />
+                <Plus size={18} className={showAdmin ? "rotate-45 transition-transform" : "transition-transform"} />
               </button>
             </div>
 
@@ -798,7 +1051,7 @@ export default function App() {
                   >
                     <div className="overflow-hidden aspect-[4/3] bg-neutral-200 relative">
                       <img 
-                        src={`https://picsum.photos/seed/${article.id}/800/600`} 
+                        src={getNewsImage(article.title, article.category)} 
                         alt={language === 'te' ? (article.title_te || article.title) : article.title}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                         referrerPolicy="no-referrer"
@@ -819,10 +1072,10 @@ export default function App() {
                           <span>•</span>
                           <span>{t('by')} {article.author}</span>
                         </div>
-                        <h3 className="text-xl md:text-2xl font-bold font-serif leading-snug group-hover:text-[#5A5A40] transition-colors text-gray-900">
+                        <h3 className={`leading-snug group-hover:text-[#5A5A40] transition-colors text-gray-900 ${language === 'te' ? 'news-title-te text-2xl' : 'news-title-en text-xl md:text-2xl font-bold'}`}>
                           {language === 'te' ? (article.title_te || article.title) : article.title}
                         </h3>
-                        <p className="text-[#1A1A1A]/70 line-clamp-3 leading-relaxed text-sm font-serif prose">
+                        <p className={`text-[#1A1A1A]/70 line-clamp-3 leading-relaxed prose ${language === 'te' ? 'news-body-te text-base' : 'news-body-en text-sm'}`}>
                           {language === 'te' ? (article.content_te || article.content) : article.content}
                         </p>
                       </div>
@@ -931,7 +1184,7 @@ export default function App() {
                       >
                         <div className="space-y-4">
                           <img 
-                            src={`https://picsum.photos/seed/${article.id}/600/400`} 
+                            src={getNewsImage(article.title, article.category)} 
                             alt={language === 'te' ? (article.title_te || article.title) : article.title}
                             className="w-full aspect-[16/10] object-cover rounded-xl mb-4"
                             referrerPolicy="no-referrer"
@@ -942,10 +1195,10 @@ export default function App() {
                             <span>•</span>
                             <span>{t('by')} {article.author}</span>
                           </div>
-                          <h3 className="text-lg md:text-xl font-bold font-serif text-gray-900 group-hover:text-[#5A5A40] transition-colors line-clamp-2">
+                          <h3 className={`group-hover:text-[#5A5A40] transition-colors line-clamp-2 text-gray-900 ${language === 'te' ? 'news-title-te text-xl' : 'news-title-en text-lg md:text-xl font-bold'}`}>
                             {language === 'te' ? (article.title_te || article.title) : article.title}
                           </h3>
-                          <p className="text-sm font-serif text-gray-600 line-clamp-3 leading-relaxed">
+                          <p className={`text-gray-600 line-clamp-3 leading-relaxed ${language === 'te' ? 'news-body-te text-base' : 'news-body-en text-sm'}`}>
                             {language === 'te' ? (article.content_te || article.content) : article.content}
                           </p>
                         </div>
@@ -1113,6 +1366,221 @@ export default function App() {
             </div>
           </div>
         )}
+        {/* ==================== PAGE VIEW 4: CITIZEN GRIEVANCE PORTAL ==================== */}
+        {activeMainTab === 'issues' && (
+          <div className="space-y-10">
+            <div className="border-b-2 border-double border-[#1A1A1A] pb-6 flex justify-between items-end">
+              <div>
+                <span className="text-[#5A5A40] font-sans font-extrabold uppercase tracking-widest text-[11px] block">
+                  {language === 'te' ? 'చిత్తూరు పౌర నివేదికల కేంద్రం' : 'CITIZEN JOURNALISM PORTAL'}
+                </span>
+                <h2 className="text-3xl md:text-5xl font-black font-serif mt-2 tracking-tight">
+                  {t('citizen_portal')}
+                </h2>
+              </div>
+              
+              <div className="flex bg-[#F5F5F0] p-1 rounded-2xl border border-gray-200/80 shadow-sm">
+                <button
+                  onClick={() => setActiveIssueTab('report')}
+                  className={`px-4 py-2 rounded-xl font-sans text-xs font-bold uppercase transition-all ${activeIssueTab === 'report' ? 'bg-[#5A5A40] text-white' : 'text-gray-500 hover:text-black'}`}
+                >
+                  {t('report_issue')}
+                </button>
+                <button
+                  onClick={() => setActiveIssueTab('timeline')}
+                  className={`px-4 py-2 rounded-xl font-sans text-xs font-bold uppercase transition-all ${activeIssueTab === 'timeline' ? 'bg-[#5A5A40] text-white' : 'text-gray-500 hover:text-black'}`}
+                >
+                  {t('reported_issues')} ({issues.length})
+                </button>
+              </div>
+            </div>
+
+            {!currentUser ? (
+              <div className="text-center py-20 bg-white border border-gray-200 rounded-3xl">
+                <div className="max-w-md mx-auto space-y-5 px-6">
+                  <div className="w-16 h-16 bg-[#5A5A40]/5 rounded-full flex items-center justify-center mx-auto text-[#5A5A40]">
+                    <User size={32} />
+                  </div>
+                  <h3 className="text-2xl font-bold font-serif">Sign In to Participate</h3>
+                  <p className="text-sm font-sans text-gray-500 leading-relaxed">
+                    You must register or log in with a citizen account to submit local community issues and have our AI engine transform them into professional bilingual news stories.
+                  </p>
+                  <button
+                    onClick={() => { setAuthTab('login'); setShowAuthModal(true); }}
+                    className="px-6 py-3 bg-[#1A1A1A] text-white rounded-xl font-bold font-sans text-xs uppercase tracking-wider hover:bg-black transition-all inline-flex items-center gap-2 shadow-md"
+                  >
+                    Get Started / Sign In
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                {activeIssueTab === 'report' ? (
+                  // Report Grievance Form
+                  <div className="lg:col-span-8 bg-white p-6 md:p-10 rounded-3xl border border-gray-200 shadow-lg space-y-6">
+                    <div>
+                      <h3 className="text-xl font-bold font-serif mb-1">{t('report_issue')}</h3>
+                      <p className="text-xs text-gray-400 font-sans">
+                        Submit details about the problem. Our copilot will translate, refine, and write a formal news column published directly to the live feed.
+                      </p>
+                    </div>
+
+                    {issueSuccessMsg && (
+                      <div className="p-4 bg-green-50 border border-green-200 text-green-800 rounded-2xl text-xs font-sans font-semibold flex items-center gap-2">
+                        <span className="text-base">✓</span>
+                        <div>
+                          <p>{issueSuccessMsg}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <form onSubmit={handleIssueSubmit} className="space-y-5">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                          <label className="block text-[10px] font-sans font-bold uppercase text-gray-500 mb-1">
+                            {t('issue_location')} (e.g., Kuppam, Chittoor Town, Tirupati)
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={issueForm.location}
+                            onChange={e => setIssueForm({ ...issueForm, location: e.target.value })}
+                            placeholder="e.g. Chittoor Bazar Street"
+                            className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-sans font-bold uppercase text-gray-500 mb-1">
+                            {t('issue_category')}
+                          </label>
+                          <select
+                            value={issueForm.category}
+                            onChange={e => setIssueForm({ ...issueForm, category: e.target.value })}
+                            className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans"
+                          >
+                            <option>Water</option>
+                            <option>Roads</option>
+                            <option>Electricity</option>
+                            <option>Garbage</option>
+                            <option>Drainage</option>
+                            <option>Others</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-sans font-bold uppercase text-gray-500 mb-1">
+                          {t('issue_subject')}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={issueForm.subject}
+                          onChange={e => setIssueForm({ ...issueForm, subject: e.target.value })}
+                          placeholder="e.g. Broken water pipe leaking on main road"
+                          className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-sans font-bold uppercase text-gray-500 mb-1">
+                          {t('issue_description')}
+                        </label>
+                        <textarea
+                          required
+                          value={issueForm.description}
+                          onChange={e => setIssueForm({ ...issueForm, description: e.target.value })}
+                          placeholder="Please provide full details about the issue so our AI engine can construct a thorough news article..."
+                          rows={6}
+                          className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans resize-none leading-relaxed"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmittingIssue}
+                        className="w-full py-4 bg-[#5A5A40] hover:bg-[#4A4A30] text-white rounded-xl font-bold font-sans text-xs uppercase tracking-wider transition-all shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+                      >
+                        <RefreshCw size={14} className={isSubmittingIssue ? 'animate-spin' : ''} />
+                        {isSubmittingIssue ? 'AI Compiling News Column...' : t('submit_issue')}
+                      </button>
+                    </form>
+                  </div>
+                ) : (
+                  // Grievance Board Timeline
+                  <div className="lg:col-span-12 space-y-6">
+                    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                      <h3 className="text-xl font-bold font-serif mb-4">{t('reported_issues')}</h3>
+                      {issues.length > 0 ? (
+                        <div className="space-y-6 relative before:absolute before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-[#5A5A40]/20 pl-10">
+                          {issues.map((issue) => (
+                            <div key={issue.id} className="relative bg-neutral-50 p-6 rounded-2xl border border-gray-200/50 shadow-sm space-y-3">
+                              {/* Node dot on timeline line */}
+                              <span className="absolute -left-[30px] top-6 w-3 h-3 bg-[#5A5A40] rounded-full border-2 border-white ring-4 ring-[#5A5A40]/10" />
+                              
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="px-2.5 py-1 bg-amber-500 text-black text-[9px] font-sans font-bold uppercase rounded-full">
+                                    {issue.category}
+                                  </span>
+                                  <span className="text-[10px] font-sans font-bold text-gray-500 uppercase tracking-widest">
+                                    📍 {issue.location}
+                                  </span>
+                                </div>
+                                <div className="text-[10px] font-sans font-bold text-gray-400">
+                                  {new Date(issue.createdAt).toLocaleString()}
+                                </div>
+                              </div>
+
+                              <h4 className="text-lg font-bold font-serif text-gray-900">{issue.subject}</h4>
+                              <p className="text-xs font-sans text-gray-600 leading-relaxed italic">"{issue.description}"</p>
+                              
+                              <div className="pt-3 border-t border-gray-200/50 flex flex-wrap items-center justify-between text-[10px] font-sans font-bold uppercase text-gray-400">
+                                <div>
+                                  Reported by: <span className="text-[#5A5A40]">{issue.reporterName}</span>
+                                </div>
+                                {issue.convertedNewsId && (
+                                  <button
+                                    onClick={() => {
+                                      const article = news.find(n => n.id === issue.convertedNewsId);
+                                      if (article) {
+                                        setSelectedArticle(article);
+                                      } else {
+                                        alert("Article could not be loaded or was removed.");
+                                      }
+                                    }}
+                                    className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 transition-all font-sans font-extrabold uppercase"
+                                  >
+                                    {t('view_ai_coverage')} <ExternalLink size={12} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs font-sans text-gray-400 italic py-10 text-center">No community issues have been reported yet. Be the first to report a grievance!</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Info side column for form */}
+                {activeIssueTab === 'report' && (
+                  <div className="lg:col-span-4 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4 h-fit">
+                    <h4 className="text-sm font-sans font-bold uppercase text-gray-400 tracking-wider">How it works</h4>
+                    <ul className="space-y-3 text-xs text-gray-500 leading-relaxed font-sans list-disc list-inside">
+                      <li>Log in and submit a genuine grievance from your area.</li>
+                      <li>Our local newspaper crawler compiles your report.</li>
+                      <li>If configured, a Gemini model translates and writes a bilingual column.</li>
+                      <li>The story immediately goes live on our front-page feed.</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
       </main>
 
@@ -1135,6 +1603,196 @@ export default function App() {
           </p>
         </div>
       </footer>
+
+      {/* User Auth Modal */}
+      <AnimatePresence>
+        {showAuthModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1B1B17]/80 backdrop-blur-sm"
+            onClick={() => setShowAuthModal(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-md p-6 md:p-8 rounded-3xl shadow-2xl relative border border-gray-100"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowAuthModal(false)}
+                className="absolute top-4 right-4 p-2 bg-neutral-100 hover:bg-neutral-200 text-gray-700 rounded-full transition-all"
+              >
+                <Plus size={16} className="rotate-45" />
+              </button>
+
+              <div className="flex border-b border-gray-100 mb-6">
+                <button
+                  onClick={() => { setAuthTab('login'); setAuthError(''); }}
+                  className={`flex-1 pb-3 text-center font-sans text-sm font-bold uppercase tracking-wider border-b-2 transition-all ${authTab === 'login' ? 'border-[#5A5A40] text-[#5A5A40]' : 'border-transparent text-gray-400'}`}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => { setAuthTab('signup'); setAuthError(''); }}
+                  className={`flex-1 pb-3 text-center font-sans text-sm font-bold uppercase tracking-wider border-b-2 transition-all ${authTab === 'signup' ? 'border-[#5A5A40] text-[#5A5A40]' : 'border-transparent text-gray-400'}`}
+                >
+                  Sign Up
+                </button>
+              </div>
+
+              <form onSubmit={handleAuthSubmit} className="space-y-4">
+                {authError && (
+                  <div className="p-3 bg-red-50 border border-red-100 text-red-700 rounded-xl text-xs flex items-center gap-2 font-sans font-semibold">
+                    <AlertCircle size={14} />
+                    <span>{authError}</span>
+                  </div>
+                )}
+
+                {authTab === 'signup' && (
+                  <div>
+                    <label className="block text-[10px] font-sans font-bold uppercase text-gray-400 mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={authForm.name}
+                      onChange={e => setAuthForm({ ...authForm, name: e.target.value })}
+                      placeholder="e.g. Roop Chand"
+                      className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[10px] font-sans font-bold uppercase text-gray-400 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={authForm.email}
+                    onChange={e => setAuthForm({ ...authForm, email: e.target.value })}
+                    placeholder="name@example.com"
+                    className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-sans font-bold uppercase text-gray-400 mb-1">Password</label>
+                  <input
+                    type="password"
+                    required
+                    value={authForm.password}
+                    onChange={e => setAuthForm({ ...authForm, password: e.target.value })}
+                    placeholder="••••••••"
+                    className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-[#1A1A1A] text-white rounded-xl font-bold font-sans text-xs uppercase tracking-wider hover:bg-black transition-colors shadow-md mt-2"
+                >
+                  {authTab === 'login' ? 'Sign In to Account' : 'Create Account'}
+                </button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Settings Modal (Gemini API Key) */}
+      <AnimatePresence>
+        {showSettingsModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#1B1B17]/80 backdrop-blur-sm"
+            onClick={() => setShowSettingsModal(false)}
+          >
+            <motion.div 
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-md p-6 md:p-8 rounded-3xl shadow-2xl relative border border-gray-100"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Close Button */}
+              <button 
+                onClick={() => setShowSettingsModal(false)}
+                className="absolute top-4 right-4 p-2 bg-neutral-100 hover:bg-neutral-200 text-gray-700 rounded-full transition-all"
+              >
+                <Plus size={16} className="rotate-45" />
+              </button>
+
+              <h3 className="text-xl font-bold font-serif mb-4 flex items-center gap-2">
+                <Sliders size={20} className="text-[#5A5A40]" />
+                Engine Settings
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-sans font-bold uppercase text-gray-400 mb-1">
+                    Google Gemini API Key
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={e => setApiKey(e.target.value)}
+                    placeholder="Enter your Gemini API key..."
+                    className="w-full p-3 bg-[#F5F5F0] rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#5A5A40] outline-none text-sm font-sans"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-2 leading-relaxed">
+                    Providing your own API Key enables live, serverless, authentic AI news translation and grounding search queries on the fly. Left empty, the system runs with local semantic templates.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    onClick={() => {
+                      localStorage.setItem('gemini_api_key', apiKey);
+                      setShowSettingsModal(false);
+                      
+                      const settingsLog: CrawlerLog = {
+                        id: Math.random().toString(36).substring(2, 9),
+                        timestamp: new Date().toISOString(),
+                        type: 'post',
+                        message: apiKey ? "Gemini API key configured. Live AI execution enabled!" : "Gemini API key removed. Using offline templates."
+                      };
+                      setCrawlerLogs(prev => [settingsLog, ...prev]);
+                    }}
+                    className="flex-1 py-3 bg-[#5A5A40] text-white rounded-xl font-bold font-sans text-xs uppercase tracking-wider hover:bg-[#4A4A30] transition-colors shadow-sm"
+                  >
+                    Save Key
+                  </button>
+                  {apiKey && (
+                    <button
+                      onClick={() => {
+                        setApiKey('');
+                        localStorage.removeItem('gemini_api_key');
+                        setShowSettingsModal(false);
+                        
+                        const settingsLog: CrawlerLog = {
+                          id: Math.random().toString(36).substring(2, 9),
+                          timestamp: new Date().toISOString(),
+                          type: 'post',
+                          message: "Gemini API key cleared. Using offline templates."
+                        };
+                        setCrawlerLogs(prev => [settingsLog, ...prev]);
+                      }}
+                      className="px-4 py-3 bg-red-50 text-red-600 rounded-xl font-bold font-sans text-xs uppercase tracking-wider hover:bg-red-100 transition-colors border border-red-100"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );
