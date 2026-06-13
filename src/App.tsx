@@ -22,7 +22,7 @@ import {
   AlertCircle,
   Globe
 } from 'lucide-react';
-import { NewsArticle } from './services/newsService';
+import { NewsArticle, newsService, WIRE_POOL, CrawlerLog } from './services/newsService';
 
 export default function App() {
   const [news, setNews] = useState<NewsArticle[]>([]);
@@ -164,25 +164,58 @@ export default function App() {
     return dict[key] ? dict[key][language] : key;
   };
 
-  // Fetch News and dates on load and start periodic pollers
+  // Load news and dates on mount, and start simulated logs ticker
   useEffect(() => {
-    fetchNews();
-    fetchDates();
-    fetchCrawlerLogs();
+    fetchNewsAndDates();
 
-    // Fast news checking for real-time auto updates when new news arrives
-    const newsTimer = setInterval(fetchNews, 4000); 
-    // Aggregate dates regularly
-    const datesTimer = setInterval(fetchDates, 6000);
-    // Real-time second-by-second online logging update
+    // Ticks logging interval to keep the grounding sensor visual log moving
     const logsTimer = setInterval(fetchCrawlerLogs, 2000);
 
     return () => {
-      clearInterval(newsTimer);
-      clearInterval(datesTimer);
       clearInterval(logsTimer);
     };
   }, []);
+
+  const currentWireIndexRef = useRef(0);
+
+  // Client-side periodic auto crawling simulation
+  useEffect(() => {
+    if (!crawlerActive) return;
+
+    const interval = setInterval(() => {
+      const wire = WIRE_POOL[currentWireIndexRef.current];
+      currentWireIndexRef.current = (currentWireIndexRef.current + 1) % WIRE_POOL.length;
+      
+      const searchLog: CrawlerLog = {
+        id: Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toISOString(),
+        type: 'search',
+        message: `Google News crawl triggered. Query: "latest ${wire.category.toLowerCase()} updates, Chittoor District"`
+      };
+      
+      const rewriteLog: CrawlerLog = {
+        id: Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toISOString(),
+        type: 'rewrite',
+        message: `Transforming wire "${wire.wireHeadline}" via local semantic rewriter...`
+      };
+
+      const saved = newsService.generateDailyNews("", wire.category);
+      
+      const publishLog: CrawlerLog = {
+        id: Math.random().toString(36).substring(2, 9),
+        timestamp: new Date().toISOString(),
+        type: 'post',
+        message: `Successfully published article bilingually to "${wire.category} Edition": "${saved.title}"`
+      };
+
+      setCrawlerLogs(prev => [publishLog, rewriteLog, searchLog, ...prev]);
+      
+      fetchNewsAndDates();
+    }, 45000); // Trigger auto-crawl step every 45 seconds when active
+
+    return () => clearInterval(interval);
+  }, [crawlerActive]);
 
   // Show a top screen flash when a brand-new article is automatically posted in the background
   useEffect(() => {
@@ -203,130 +236,117 @@ export default function App() {
     }
   }, [news, language]);
 
-  const fetchNews = async () => {
-    try {
-      const res = await fetch('/api/news');
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        setNews(data);
+  // Load news, archives and computed dates client-side
+  const fetchNewsAndDates = () => {
+    const allNews = newsService.getNews();
+    setNews(allNews);
+    
+    const dates = newsService.getAvailableDates(allNews);
+    setAvailableDates(dates);
+    
+    if (dates.length > 0 && !selectedArchiveDate) {
+      const todayString = new Date().toDateString();
+      const olderDate = dates.find((dStr: string) => new Date(dStr).toDateString() !== todayString);
+      if (olderDate) {
+        setSelectedArchiveDate(olderDate);
+      } else {
+        setSelectedArchiveDate(dates[0]);
       }
-    } catch (err) {
-      console.warn('News update pending:', err);
     }
+  };
+
+  const fetchNews = async () => {
+    fetchNewsAndDates();
   };
 
   const fetchDates = async () => {
-    try {
-      const res = await fetch('/api/news/dates');
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        setAvailableDates(data);
-        // Automatically default selected archive date to yesterday or first older index if not set
-        if (data.length > 0 && !selectedArchiveDate) {
-          const todayString = new Date().toDateString();
-          // Find the first date that isn't today
-          const olderDate = data.find((dStr: string) => new Date(dStr).toDateString() !== todayString);
-          if (olderDate) {
-            setSelectedArchiveDate(olderDate);
-          } else {
-            setSelectedArchiveDate(data[0]); // Defaulter
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('Dates fetch pending:', err);
-    }
+    fetchNewsAndDates();
   };
 
   const fetchCrawlerLogs = async () => {
-    try {
-      const res = await fetch('/api/crawler/logs');
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        setCrawlerLogs(data.logs);
-        setCrawlerActive(data.isActive);
-      }
-    } catch (err) {
-      console.warn('Crawler diagnostics sync pending:', err);
-    }
+    const simulated = newsService.getSimulatedLogs(crawlerLogs);
+    setCrawlerLogs(simulated);
   };
 
-  const handleToggleCrawler = async () => {
-    try {
-      const res = await fetch('/api/crawler/toggle', { method: 'POST' });
-      const contentType = res.headers.get('content-type');
-      if (res.ok && contentType && contentType.includes('application/json')) {
-        const data = await res.json();
-        setCrawlerActive(data.isActive);
-        fetchCrawlerLogs();
-      }
-    } catch (err) {
-      console.error('Failed to toggle active crawler:', err);
-    }
+  const handleToggleCrawler = () => {
+    const newState = !crawlerActive;
+    setCrawlerActive(newState);
+    
+    const toggleLog: CrawlerLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      type: 'post',
+      message: `AI Crawler harvester toggled to: ${newState ? "ACTIVE" : "PAUSED"}`
+    };
+    
+    setCrawlerLogs(prev => [toggleLog, ...prev]);
   };
 
-  const handleManualUpload = async (e: React.FormEvent) => {
+  const handleManualUpload = (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const res = await fetch('/api/news', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newArticle.title,
-          content: newArticle.content,
-          title_te: newArticle.title_te,
-          content_te: newArticle.content_te,
-          category: newArticle.category,
-          author: newArticle.author || 'Chittoor Times Desk',
-          date: new Date().toISOString()
-        })
-      });
-      if (res.ok) {
-        setNewArticle({ 
-          title: '', 
-          content: '', 
-          title_te: '', 
-          content_te: '', 
-          category: activeCategory, 
-          author: '' 
-        });
-        fetchNews();
-        fetchDates();
-        setShowAdmin(false);
-      }
-    } catch (err) {
-      console.error('Upload failed:', err);
-    }
+    if (!newArticle.title || !newArticle.content) return;
+
+    newsService.uploadArticle({
+      title: newArticle.title,
+      content: newArticle.content,
+      title_te: newArticle.title_te,
+      content_te: newArticle.content_te,
+      category: newArticle.category,
+      author: newArticle.author || 'Chittoor Times Desk',
+      date: new Date().toISOString()
+    });
+
+    setNewArticle({ 
+      title: '', 
+      content: '', 
+      title_te: '', 
+      content_te: '', 
+      category: activeCategory, 
+      author: '' 
+    });
+
+    fetchNewsAndDates();
+    setShowAdmin(false);
   };
 
-  // Immediate manual crawler search invoke
   const handleForcedSearchAndFormat = async () => {
     setIsGenerating(true);
-    try {
-      const topic = activeCategory === 'Local' ? 'latest news in Chittoor and Tirupati' : 
-                   activeCategory === 'National' ? 'latest national news in India' : 
-                   'latest international world news';
-                   
-      const res = await fetch('/api/news/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          topic,
-          category: activeCategory
-        })
-      });
-      if (res.ok) {
-        fetchNews();
-        fetchDates();
+    
+    const searchLog: CrawlerLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      type: 'search',
+      message: `Manual News Re-Harvest forced for category: ${activeCategory}`
+    };
+    
+    const rewriteLog: CrawlerLog = {
+      id: Math.random().toString(36).substring(2, 9),
+      timestamp: new Date().toISOString(),
+      type: 'rewrite',
+      message: `Executing client-side search compilation for "${activeCategory}"...`
+    };
+    
+    setCrawlerLogs(prev => [rewriteLog, searchLog, ...prev]);
+
+    setTimeout(() => {
+      try {
+        const saved = newsService.generateDailyNews("", activeCategory);
+        
+        const publishLog: CrawlerLog = {
+          id: Math.random().toString(36).substring(2, 9),
+          timestamp: new Date().toISOString(),
+          type: 'post',
+          message: `Successfully formatted and published Manual request: "${saved.title}"`
+        };
+        
+        setCrawlerLogs(prev => [publishLog, ...prev]);
+        fetchNewsAndDates();
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsGenerating(false);
       }
-    } catch (err) {
-      console.error('AI forced search failed:', err);
-    } finally {
-      setIsGenerating(false);
-    }
+    }, 1000);
   };
 
   // Segregate articles based on today versus archives (another page)
