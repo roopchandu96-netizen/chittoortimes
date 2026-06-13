@@ -9,7 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const DATA_FILE = path.join(process.cwd(), "news_data.json");
 const USERS_FILE = path.join(process.cwd(), "users_data.json");
 const COMMENTS_FILE = path.join(process.cwd(), "comments_data.json");
