@@ -1,0 +1,6 @@
+{
+  "name": "Chittoor Times",
+  "description": "A local news platform for Chittoor, featuring automated AI updates and manual reporting.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
