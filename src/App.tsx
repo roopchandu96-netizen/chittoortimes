@@ -786,9 +786,13 @@ export default function App() {
 
               <button 
                 onClick={() => setActiveMainTab('issues')}
-                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 flex-shrink-0 ${activeMainTab === 'issues' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
+                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 flex-shrink-0 ${
+                  activeMainTab === 'issues' 
+                    ? 'bg-emerald-700 text-white shadow-md' 
+                    : 'bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100/70'
+                }`}
               >
-                <Globe size={14} />
+                <Globe size={14} className={activeMainTab === 'issues' ? 'animate-pulse' : 'text-emerald-700'} />
                 {t('citizen_portal')}
               </button>
             </div>

@@ -10,6 +10,7 @@ export interface NewsArticle {
   author: string;
   date: string;
   createdAt: string;
+  wireHeadline?: string;
 }
 
 export interface CrawlerLog {
@@ -493,18 +494,20 @@ export const newsService = {
     const matchedWires = WIRE_POOL.filter(w => w.category === category);
     const existingNews = this.getNews();
 
-    // Frequency analysis to avoid repeating wire templates
+    // Frequency analysis to avoid repeating wire templates using exact headline match & fallbacks
     const wireFrequency = matchedWires.map(wire => {
       const occurrences = existingNews.filter(article => {
+        // 1. Check if the article has the wireHeadline property matching
+        if (article.wireHeadline === wire.wireHeadline) return true;
+
+        // 2. Fallback check: check if the article title matches the wire headline (ignoring common prefixes)
         if (!article.title) return false;
-        const titleLower = article.title.toLowerCase();
-        const contentLower = (article.content || '').toLowerCase();
-        const wireHeadlineLower = (wire.wireHeadline || '').toLowerCase();
-        const rawWireLower = (wire.rawWireText || '').toLowerCase().substring(0, 30);
-        
-        return titleLower.includes(wireHeadlineLower) || 
-               wireHeadlineLower.includes(titleLower) ||
-               (rawWireLower && contentLower.includes(rawWireLower));
+        const cleanTitle = article.title.replace(/^(Breaking|Special Report|In-Depth|Exclusive|Urgent Citizen Report|Citizen Grievance|Public Forum Bulletin|Community Alert|తాజా వార్త|ప్రత్యేక వార్త|ముఖ్య వృత్తాంతం|ప్రత్యేక నివేదిక|ప్రజా సమస్య|త్వరిత నివేదిక|పౌర గర్జన|స్థానిక సమస్య):\s*/i, '').trim().toLowerCase();
+        const cleanWireHeadline = wire.wireHeadline.toLowerCase().trim();
+
+        return cleanTitle === cleanWireHeadline || 
+               cleanTitle.includes(cleanWireHeadline) || 
+               cleanWireHeadline.includes(cleanTitle);
       }).length;
       return { wire, occurrences };
     });
@@ -562,8 +565,9 @@ export const newsService = {
       content_te: contentTeOut,
       category: category,
       author: "Chittoor Times Desk",
-      date: new Date().toISOString()
-    });
+      date: new Date().toISOString(),
+      wireHeadline: wireSelected.wireHeadline
+    } as any);
 
     return saved;
   },
