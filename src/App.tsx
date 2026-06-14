@@ -288,12 +288,33 @@ export default function App() {
     // Automatically trigger news update in the background when website opens
     const autoUpdateOnMount = async () => {
       try {
-        await Promise.all([
-          newsService.generateDailyNews("", "Local", apiKey),
-          newsService.generateDailyNews("", "National", apiKey),
-          newsService.generateDailyNews("", "International", apiKey)
-        ]);
-        fetchNewsAndDates();
+        const categories = [
+          'Local', 'National', 'International', 'Politics', 
+          'Business', 'Economics', 'Technology', 'Sports', 
+          'Cinema', 'Classifieds'
+        ];
+        const todayStr = new Date().toDateString();
+        const existingNews = newsService.getNews();
+
+        // Find categories that don't have today's news
+        const categoriesToUpdate = categories.filter(cat => {
+          return !existingNews.some(article => {
+            const isToday = new Date(article.date).toDateString() === todayStr;
+            return isToday && article.category === cat;
+          });
+        });
+
+        // Run updates sequentially with a small delay for rate limit safety
+        for (const cat of categoriesToUpdate) {
+          try {
+            await newsService.generateDailyNews("", cat, apiKey);
+            fetchNewsAndDates();
+            // 1.5s delay to be friendly to the API quota
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          } catch (catErr) {
+            console.error(`Auto-update failed for category: ${cat}`, catErr);
+          }
+        }
       } catch (err) {
         console.error("Auto update on mount failed:", err);
       }

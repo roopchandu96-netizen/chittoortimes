@@ -491,7 +491,27 @@ export const newsService = {
   // Simulates or runs Gemini AI news generator using local wire pool
   async generateDailyNews(topic: string = "", category: string = "Local", apiKey: string | null = null): Promise<NewsArticle> {
     const matchedWires = WIRE_POOL.filter(w => w.category === category);
-    const wireSelected = matchedWires[Math.floor(Math.random() * matchedWires.length)] || WIRE_POOL[0];
+    const existingNews = this.getNews();
+
+    // Frequency analysis to avoid repeating wire templates
+    const wireFrequency = matchedWires.map(wire => {
+      const occurrences = existingNews.filter(article => {
+        if (!article.title) return false;
+        const titleLower = article.title.toLowerCase();
+        const contentLower = (article.content || '').toLowerCase();
+        const wireHeadlineLower = (wire.wireHeadline || '').toLowerCase();
+        const rawWireLower = (wire.rawWireText || '').toLowerCase().substring(0, 30);
+        
+        return titleLower.includes(wireHeadlineLower) || 
+               wireHeadlineLower.includes(titleLower) ||
+               (rawWireLower && contentLower.includes(rawWireLower));
+      }).length;
+      return { wire, occurrences };
+    });
+
+    // Sort by occurrences to choose the least used one
+    wireFrequency.sort((a, b) => a.occurrences - b.occurrences);
+    const wireSelected = wireFrequency[0]?.wire || WIRE_POOL[0];
 
     let headlineOut = "";
     let contentOut = "";
@@ -501,10 +521,20 @@ export const newsService = {
 
     if (apiKey) {
       try {
+        const existingTitles = existingNews
+          .filter(a => a.category === category)
+          .slice(0, 10)
+          .map(a => `- ${a.title}`)
+          .join("\n");
+
         const prompt = `Search internet for the absolute latest, breaking, actual news regarding "${topic || wireSelected.wireHeadline}". 
         Reformat it into a highly detailed news report for a local Indian newspaper called Chittoor Times under the category "${category}".
         Provide both a premium English version and its authentic, natural Telugu translated version.
-        Include real facts. Return a single JSON object conforming to format exactly:
+        
+        IMPORTANT: Do NOT write about any of these topics/headlines that have already been published:
+        ${existingTitles || "None"}
+        
+        Write about a different, fresh news event related to this category. Include real facts. Return a single JSON object conforming to format exactly:
         { "title": "catchy headline in English", "content": "full news article in English", "title_te": "catchy headline in Telugu", "content_te": "full news article in Telugu" }`;
 
         const parsed = await callGeminiAPI(prompt, apiKey, true);
