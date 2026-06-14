@@ -285,6 +285,21 @@ export default function App() {
   useEffect(() => {
     fetchNewsAndDates();
 
+    // Automatically trigger news update in the background when website opens
+    const autoUpdateOnMount = async () => {
+      try {
+        await Promise.all([
+          newsService.generateDailyNews("", "Local", apiKey),
+          newsService.generateDailyNews("", "National", apiKey),
+          newsService.generateDailyNews("", "International", apiKey)
+        ]);
+        fetchNewsAndDates();
+      } catch (err) {
+        console.error("Auto update on mount failed:", err);
+      }
+    };
+    autoUpdateOnMount();
+
     // Ticks logging interval to keep the grounding sensor visual log moving
     const logsTimer = setInterval(fetchCrawlerLogs, 2000);
 
@@ -361,16 +376,8 @@ export default function App() {
   useEffect(() => {
     if (news.length > 0) {
       if (prevNewsLengthRef.current > 0 && news.length > prevNewsLengthRef.current) {
-        const latestItem = news[0];
-        // Flash a notification toast for breaking news
-        const titleFlash = language === 'te' ? (latestItem.title_te || latestItem.title) : latestItem.title;
-        setNewNewsToast(`${language === 'te' ? 'తాజా వార్త' : 'BREAKING'}: ${titleFlash}`);
         // Refresh archives dates in case it's a new day or new tag
         fetchDates();
-        // Dismiss after 6 seconds
-        setTimeout(() => {
-          setNewNewsToast(null);
-        }, 6000);
       }
       prevNewsLengthRef.current = news.length;
     }
@@ -455,24 +462,8 @@ export default function App() {
   const handleForcedSearchAndFormat = async () => {
     setIsGenerating(true);
     
-    const searchLog: CrawlerLog = {
-      id: Math.random().toString(36).substring(2, 9),
-      timestamp: new Date().toISOString(),
-      type: 'search',
-      message: `Manual News Re-Harvest forced for category: ${activeCategory}`
-    };
+    // Harvester hidden for end-user view, functionality simplified
     
-    const rewriteLog: CrawlerLog = {
-      id: Math.random().toString(36).substring(2, 9),
-      timestamp: new Date().toISOString(),
-      type: 'rewrite',
-      message: apiKey 
-        ? `Executing Gemini AI search compilation for "${activeCategory}"...`
-        : `Executing client-side search compilation for "${activeCategory}"...`
-    };
-    
-    setCrawlerLogs(prev => [rewriteLog, searchLog, ...prev]);
-
     setTimeout(async () => {
       try {
         const saved = await newsService.generateDailyNews("", activeCategory, apiKey);
@@ -755,10 +746,10 @@ export default function App() {
             </div>
 
             {/* Custom Interactive Module Tab Selectors */}
-            <div className="flex items-center bg-[#F5F5F0] p-1.5 rounded-full border border-gray-200">
+            <div className="flex items-center bg-[#F5F5F0] p-1.5 rounded-full border border-gray-200 overflow-x-auto whitespace-nowrap scrollbar-none max-w-full">
               <button 
                 onClick={() => setActiveMainTab('live')}
-                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${activeMainTab === 'live' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
+                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 flex-shrink-0 ${activeMainTab === 'live' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
               >
                 <Radio size={14} className={activeMainTab === 'live' ? 'text-amber-400 animate-pulse' : ''} />
                 {t('live_edition')}
@@ -766,24 +757,15 @@ export default function App() {
               
               <button 
                 onClick={() => setActiveMainTab('archives')}
-                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${activeMainTab === 'archives' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
+                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 flex-shrink-0 ${activeMainTab === 'archives' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
               >
                 <Calendar size={14} />
                 {t('past_editions')}
               </button>
-              
-              <button 
-                onClick={() => setActiveMainTab('crawler')}
-                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${activeMainTab === 'crawler' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
-              >
-                <Terminal size={14} />
-                {t('ai_harvester')} 
-                <span className={`w-2 h-2 rounded-full ${crawlerActive ? 'bg-green-500 animate-pulse' : 'bg-red-400'}`} />
-              </button>
 
               <button 
                 onClick={() => setActiveMainTab('issues')}
-                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${activeMainTab === 'issues' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
+                className={`px-5 py-2 rounded-full font-sans text-xs font-bold uppercase tracking-wider transition-all duration-200 flex items-center gap-2 flex-shrink-0 ${activeMainTab === 'issues' ? 'bg-[#1A1A1A] text-white' : 'text-gray-600 hover:text-black'}`}
               >
                 <Globe size={14} />
                 {t('citizen_portal')}
@@ -844,7 +826,7 @@ export default function App() {
             </div>
             
             {/* Category tabs */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 justify-start md:justify-end w-full md:w-auto">
+            <div className="flex overflow-x-auto whitespace-nowrap scrollbar-none max-w-full items-center gap-x-4 gap-y-2 justify-start md:justify-end w-full md:w-auto pb-1">
               {([
                 'Local', 
                 'National', 
@@ -860,7 +842,7 @@ export default function App() {
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`pb-1 border-b-2 font-black transition-all ${activeCategory === cat ? 'border-[#1A1A1A] text-[#1A1A1A]' : 'border-transparent text-gray-400 hover:text-black font-sans text-xs'}`}
+                  className={`pb-1 border-b-2 font-black transition-all flex-shrink-0 ${activeCategory === cat ? 'border-[#1A1A1A] text-[#1A1A1A]' : 'border-transparent text-gray-400 hover:text-black font-sans text-xs'}`}
                 >
                   {t(cat.toLowerCase() + '_edition')}
                 </button>
@@ -874,49 +856,7 @@ export default function App() {
       {/* Main Container */}
       <main className="max-w-6xl mx-auto px-6 py-10">
 
-        {/* Action Bar for Manual Generate & Controls */}
-        <div className="bg-white px-6 py-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4 mb-10">
-          <div className="flex items-center gap-3">
-            <span className="p-2 bg-[#5A5A40]/10 rounded-xl text-[#5A5A40]">
-              <Activity size={18} />
-            </span>
-            <div className="leading-tight">
-              <span className="text-[10px] font-sans font-bold text-gray-400 uppercase tracking-widest block">
-                {language === 'te' ? 'కృత్రిమ మేధస్సు స్థితి పట్టీ' : 'AI AUTOPILOT ENGINE STATUS'}
-              </span>
-              <p className="text-xs font-sans font-bold text-gray-700">
-                {crawlerActive ? t('active_status') : t('status_suspended')}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={handleToggleCrawler}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-sans font-bold uppercase tracking-wider border transition-all ${crawlerActive ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100' : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'}`}
-            >
-              {crawlerActive ? (
-                <>
-                  <Pause size={14} /> {t('pause_harvester')}
-                </>
-              ) : (
-                <>
-                  <Play size={14} /> {t('resume_harvester')}
-                </>
-              )}
-            </button>
-
-            <button
-              id="ai-generate-btn"
-              onClick={handleForcedSearchAndFormat}
-              disabled={isGenerating}
-              className="flex items-center gap-2 px-5 py-2 bg-[#5A5A40] text-white rounded-xl text-xs font-sans font-semibold hover:bg-[#4A4A30] transition-all disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={isGenerating ? 'animate-spin' : ''} />
-              {isGenerating ? (language === 'te' ? 'క్రాల్ అవుతోంది...' : 'Crawling...') : `${language === 'te' ? 'త్వరిత అప్‌డేట్ చేయి' : 'Force Online Scan'}: ${t(activeCategory.toLowerCase() + '_edition')}`}
-            </button>
-          </div>
-        </div>
+        {/* Action Bar removed */}
 
         {/* Admin Write Column Form */}
         <AnimatePresence>
@@ -1113,14 +1053,10 @@ export default function App() {
                   </div>
                   <h3 className="text-2xl font-bold font-serif">{t('awaiting_wires')}</h3>
                   <p className="text-sm font-sans text-gray-500 leading-relaxed">
-                    {t('awaiting_wires_desc')} {t('awaiting_live_wires_sub')}
+                    {language === 'te' 
+                      ? 'ఈ విభాగంలో నేడు వార్తలేవీ ఇంకా ప్రచురితం కాలేదు. గ్లోబల్ వెబ్ నుండి AI ఫీడ్స్ నిరంతరం సేకరిస్తూనే ఉంటుంది.' 
+                      : 'No articles published in this category yet today. The automated AI scan is updating the feed in the background.'}
                   </p>
-                  <button
-                    onClick={handleForcedSearchAndFormat}
-                    className="px-5 py-2.5 bg-neutral-900 font-sans text-xs font-bold uppercase tracking-wider text-white hover:bg-black rounded-lg transition-all inline-flex items-center gap-2"
-                  >
-                    <RefreshCw size={14} /> {t('force_scan_now')}
-                  </button>
                 </div>
               </div>
             )}
